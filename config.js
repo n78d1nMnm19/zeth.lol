@@ -18,7 +18,7 @@ window.ZETH_CONFIG = {
    * Same file as the background is fine: the `<audio>` element plays the file’s audio track.
    * Plays automatically when you click the gate (“click to enter”).
    */
-  soundUrl: "/assets/site-track.mp3?v=3",
+  soundUrl: "/assets/site-track.mp4?v=1",
   /** Playback volume 0–1 (softer = less harsh). */
   soundVolume: 0.3,
   /**
