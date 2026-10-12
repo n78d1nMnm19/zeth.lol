@@ -20,7 +20,7 @@ window.ZETH_CONFIG = {
    */
   soundUrl: "/assets/snaptik_7675527030619786528_v3.mp4?v=3",
   /** Playback volume 0–1 (softer = less harsh). */
-  soundVolume: 0.3,
+  soundVolume: 0.85,
   /**
    * Keep the site track playing even while Spotify / listening card is active.
    * Listening UI is lyrics + metadata only (no YouTube mirror audio).
