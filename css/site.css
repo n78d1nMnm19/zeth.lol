@@ -410,6 +410,9 @@ body.cursor-none .gate {
     0 0 42px rgba(180, 230, 180, 0.14),
     0 0 72px rgba(160, 220, 255, 0.08);
   animation: now-neon-pulse 2.8s ease-in-out infinite;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .now-card--neon::before {
@@ -436,6 +439,30 @@ body.cursor-none .gate {
   mask-composite: exclude;
   pointer-events: none;
   animation: now-neon-border 3.6s linear infinite;
+  transition: background 0.25s ease, opacity 0.25s ease;
+}
+
+/* Hover: neon borders shift a little white */
+.now-card--neon:hover {
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 0 20px rgba(255, 255, 255, 0.28),
+    0 0 44px rgba(220, 255, 230, 0.18),
+    0 0 70px rgba(255, 255, 255, 0.1);
+  animation: none;
+}
+
+.now-card--neon:hover::before {
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.35) 40%,
+    rgba(230, 255, 240, 0.55) 70%,
+    rgba(255, 255, 255, 0.8)
+  );
+  animation: none;
 }
 
 @keyframes now-neon-pulse {
@@ -469,17 +496,15 @@ body.cursor-none .gate {
 
 .now-ico {
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.9);
   line-height: 0;
-  filter: drop-shadow(0 0 8px rgba(255, 230, 120, 0.55))
-    drop-shadow(0 0 16px rgba(200, 240, 200, 0.35));
 }
 
 .now-emoji {
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
+  border-radius: 8px;
 }
 
 .now-body {
