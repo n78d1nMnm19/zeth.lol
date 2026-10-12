@@ -1,0 +1,42 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  command = "npm install --omit=dev"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VIEWS_START_AT = "3635"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["netlify/functions/**", "lib/**"]
+
+[[redirects]]
+  from = "/api/views"
+  to = "/.netlify/functions/views"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/badges"
+  to = "/.netlify/functions/badges"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/discord"
+  to = "/.netlify/functions/discord"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/listening"
+  to = "/.netlify/functions/listening"
+  status = 200
+  force = true

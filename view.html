@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>slits.lol</title>
+    <link rel="icon" href="/assets/favicon.png?v=2" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=2" sizes="180x180" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/site.css" />
+  </head>
+  <body>
+    <video id="bg-video" class="bg-video hidden" autoplay muted loop playsinline aria-hidden="true"></video>
+    <div id="bg-fallback" class="bg-fallback" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <canvas id="rain-canvas" aria-hidden="true"></canvas>
+
+    <canvas id="trail-canvas" aria-hidden="true"></canvas>
+    <div id="cursor-3d" class="cursor-3d hidden" aria-hidden="true">
+      <img id="cursor-img" alt="" draggable="false" />
+    </div>
+
+    <div class="gate" id="gate" role="button" tabindex="0">
+      <p id="gate-label">click to enter</p>
+    </div>
+
+    <div class="views-chip" aria-label="views">
+      <svg class="views-eye" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"
+        />
+      </svg>
+      <span id="view-count">99</span>
+      <span class="views-word">views</span>
+    </div>
+
+    <div class="perspective-wrap" id="perspective-wrap">
+      <main class="stack tilt-scene bio-stack" id="tilt-scene">
+        <header class="bio-header">
+          <div class="bio-av-wrap">
+            <img id="hero-img" class="hero-av hidden" alt="" width="72" height="72" />
+            <span id="status-dot" class="status-dot status-dot--offline" aria-hidden="true"></span>
+          </div>
+          <div class="bio-intro">
+            <p class="hey">hey, i'm</p>
+            <h1 class="display-name">
+              <span class="name-wrap">
+                <span id="name">refuse</span>
+              </span>
+              <span id="name-icons" class="name-icons hidden"></span>
+            </h1>
+            <p class="discord-line">
+              <img class="discord-line-ico" src="/assets/discord-icon.svg" alt="" width="14" height="14" />
+              <span id="discord-handle">@…</span>
+              <span class="discord-dot" aria-hidden="true">·</span>
+              <span id="discord-status">offline</span>
+            </p>
+            <p class="bio hidden" id="bio"></p>
+            <p class="joined hidden" id="joined"></p>
+            <div class="badge-row hidden" id="badges" aria-label="Discord badges"></div>
+          </div>
+        </header>
+
+        <section class="bio-section">
+          <h2 class="sec-label">— right now</h2>
+
+          <div id="now-idle" class="now-card">
+            <span class="now-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18">
+                <path
+                  fill="currentColor"
+                  d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"
+                />
+              </svg>
+            </span>
+            <div class="now-body">
+              <strong id="now-title">doing nothing.</strong>
+              <p id="now-sub">probably somewhere on discord</p>
+            </div>
+          </div>
+
+          <div id="now-listening" class="listen-card hidden">
+            <img id="listen-art" class="listen-art hidden" alt="" width="52" height="52" />
+            <div class="listen-body">
+              <strong id="listen-title">—</strong>
+              <p id="listen-artist">—</p>
+            </div>
+          </div>
+
+          <div id="lyrics-panel" class="lyrics-panel hidden" aria-live="polite">
+            <div class="lyrics-fade lyrics-fade--top" aria-hidden="true"></div>
+            <div class="lyrics-viewport">
+              <div id="lyrics-track" class="lyrics-track"></div>
+            </div>
+            <div class="lyrics-fade lyrics-fade--bot" aria-hidden="true"></div>
+          </div>
+        </section>
+
+        <section class="bio-section">
+          <h2 class="sec-label">— socials</h2>
+          <div class="build-grid">
+            <a
+              id="roblox-card"
+              class="build-card"
+              href="https://www.roblox.com/users/3003741744/profile"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                id="roblox-av"
+                class="build-av"
+                alt=""
+                width="40"
+                height="40"
+                src="/assets/roblox-av.png?v=2"
+              />
+              <div class="build-text">
+                <strong>Roblox</strong>
+                <p>open my profile</p>
+              </div>
+            </a>
+
+            <a
+              id="discord-user-card"
+              class="build-card"
+              href="https://discord.com/users/714938930948079728"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img id="build-discord-av" class="build-av" alt="" width="40" height="40" />
+              <div class="build-text">
+                <strong>Discord</strong>
+                <p id="build-discord-name">…</p>
+              </div>
+            </a>
+
+            <a
+              id="server-card"
+              class="build-card build-card--server"
+              href="https://discord.gg/endings"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <div class="srv-av" id="srv-av">
+                <img id="srv-icon" class="srv-icon hidden" alt="" width="44" height="44" />
+                <span class="srv-fallback" aria-hidden="true">/</span>
+              </div>
+              <div class="srv-body">
+                <span class="srv-badge" id="srv-badge">server</span>
+                <strong class="srv-vanity" id="srv-vanity">/endings</strong>
+                <p class="srv-stats" id="srv-stats">— Online • — Members</p>
+              </div>
+              <span class="join-pill">Join</span>
+            </a>
+          </div>
+        </section>
+
+        <!-- Keep IDs for legacy presence helpers (hidden) -->
+        <div class="hidden" aria-hidden="true">
+          <span id="pres-name"></span>
+          <span id="pres-status"></span>
+          <div id="pres-wrap" class="pres-av-wrap">
+            <img id="pres-img" alt="" />
+            <span id="pres-dnd" class="dnd hidden"></span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="yt-player-embed" class="yt-player-host" aria-hidden="true"></div>
+    <div id="listen-yt-host" class="listen-yt-host" aria-hidden="true"></div>
+    <audio id="audio1" preload="auto" loop playsinline webkit-playsinline></audio>
+
+    <script src="/js/sound.js"></script>
+    <script src="/config.js"></script>
+    <script src="/js/discord-server.js"></script>
+    <script src="/js/now-playing.js"></script>
+    <script src="/js/site.js"></script>
+    <script>
+      (function () {
+        document.addEventListener("contextmenu", function (e) {
+          e.preventDefault();
+        });
+        document.addEventListener(
+          "keydown",
+          function (e) {
+            var k = e.key || "";
+            var code = e.keyCode || e.which;
+            if (
+              code === 123 ||
+              k === "F12" ||
+              (e.ctrlKey && e.shiftKey && (k === "I" || k === "J" || k === "C" || code === 73 || code === 74 || code === 67)) ||
+              (e.ctrlKey && (k === "u" || k === "U" || code === 85)) ||
+              (e.metaKey && e.altKey && (k === "i" || k === "I" || k === "j" || k === "J" || k === "c" || k === "C")) ||
+              (e.metaKey && (k === "u" || k === "U"))
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }
+          },
+          true
+        );
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "slits.lol",
+  "private": true,
+  "description": "slits.lol site + Netlify API (views, badges, Discord slash commands)",
+  "scripts": {
+    "bot": "npm --prefix bot run bot",
+    "server": "npm --prefix bot run server",
+    "start": "npm --prefix bot run bot",
+    "register": "npm --prefix bot run register"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "tweetnacl": "^1.0.3"
+  }
+}

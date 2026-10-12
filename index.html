@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>slits.lol</title>
+    <link rel="icon" href="/assets/favicon.png?v=2" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=2" sizes="180x180" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe
+      id="frame"
+      src="/view.html"
+      title="slits.lol"
+      allow="autoplay; fullscreen; clipboard-write"
+      allowfullscreen
+      referrerpolicy="same-origin"
+    ></iframe>
+    <script>
+      (function () {
+        document.addEventListener("contextmenu", function (e) {
+          e.preventDefault();
+        });
+        document.addEventListener(
+          "keydown",
+          function (e) {
+            var k = e.key || "";
+            var code = e.keyCode || e.which;
+            if (
+              code === 123 ||
+              k === "F12" ||
+              (e.ctrlKey && e.shiftKey && (k === "I" || k === "J" || k === "C" || code === 73 || code === 74 || code === 67)) ||
+              (e.ctrlKey && (k === "u" || k === "U" || code === 85)) ||
+              (e.metaKey && e.altKey && (k === "i" || k === "I" || k === "j" || k === "J" || k === "c" || k === "C")) ||
+              (e.metaKey && (k === "u" || k === "U"))
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+            }
+          },
+          true
+        );
+
+        // Tab / media bar typewriter: s → slits.lol → back to .
+        var frames = [
+          "s",
+          "sl",
+          "sli",
+          "slit",
+          "slits",
+          "slits.",
+          "slits.l",
+          "slits.lo",
+          "slits.lol",
+          "slits.lol",
+          "slits.lo",
+          "slits.l",
+          "slits.",
+          "slits",
+          "slit",
+          "sli",
+          "sl",
+          "s",
+          ".",
+          ".",
+        ];
+        var i = 0;
+        function tickTitle() {
+          document.title = frames[i];
+          var cur = frames[i];
+          var next = frames[(i + 1) % frames.length];
+          var hold = cur === "slits.lol" || cur === "." ? 700 : 160;
+          if (cur.length < next.length) hold = 140;
+          i = (i + 1) % frames.length;
+          setTimeout(tickTitle, hold);
+        }
+        tickTitle();
+      })();
+    </script>
+  </body>
+</html>

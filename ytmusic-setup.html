@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect YouTube Music</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, sans-serif;
+        color: #fff;
+        background: #0a0a0a;
+      }
+      body {
+        max-width: 640px;
+        margin: 40px auto;
+        padding: 0 20px 60px;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: #9ca3af;
+        font-size: 14px;
+      }
+      ol {
+        padding-left: 1.2rem;
+        color: #d1d5db;
+        font-size: 14px;
+      }
+      li {
+        margin: 8px 0;
+      }
+      code {
+        background: #1f1f23;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 140px;
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #333;
+        background: #141416;
+        color: #fff;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        resize: vertical;
+      }
+      button {
+        margin-top: 12px;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 999px;
+        background: #fff;
+        color: #000;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .status {
+        margin-top: 14px;
+        font-size: 13px;
+      }
+      .ok {
+        color: #4ade80;
+      }
+      .err {
+        color: #f87171;
+      }
+      a {
+        color: #93c5fd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Connect YouTube Music</h1>
+    <p class="muted">
+      YouTube doesn’t offer a public “now playing” API. This uses your logged-in
+      <strong>music.youtube.com</strong> session (cookie) so the site can read your play history and sync lyrics.
+    </p>
+
+    <ol>
+      <li>Open <a href="https://music.youtube.com" target="_blank" rel="noopener">music.youtube.com</a> and make sure you’re logged in.</li>
+      <li>Press <code>F12</code> → <strong>Network</strong>.</li>
+      <li>Click around once (e.g. Library), then filter for <code>browse</code>.</li>
+      <li>Click a <code>browse</code> request → <strong>Headers</strong> → find <code>Cookie</code>.</li>
+      <li>Right-click the Cookie value → Copy, paste it below.</li>
+    </ol>
+
+    <textarea id="cookie" placeholder="Paste the full Cookie header here…"></textarea>
+    <button id="btn" type="button">Connect account</button>
+    <p id="status" class="status muted">Checking…</p>
+    <p class="muted" style="margin-top: 24px">
+      After connecting, run the site with <code>npm run server</code> and open
+      <a href="/">the homepage</a>. Play a song on YouTube Music — the page should switch from your MP3 to live lyrics.
+    </p>
+
+    <script>
+      (function () {
+        var status = document.getElementById("status");
+        var btn = document.getElementById("btn");
+        var cookieEl = document.getElementById("cookie");
+
+        function setStatus(text, cls) {
+          status.className = "status " + (cls || "muted");
+          status.textContent = text;
+        }
+
+        fetch("/api/ytmusic/status")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d && d.configured) setStatus("Already connected.", "ok");
+            else setStatus("Not connected yet.", "muted");
+          })
+          .catch(function () {
+            setStatus("Start the local server first: npm run server", "err");
+          });
+
+        btn.addEventListener("click", function () {
+          var cookie = cookieEl.value.trim();
+          if (!cookie) {
+            setStatus("Paste the Cookie header first.", "err");
+            return;
+          }
+          btn.disabled = true;
+          setStatus("Connecting…", "muted");
+          fetch("/api/ytmusic/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cookie: cookie }),
+          })
+            .then(function (r) {
+              return r.json().then(function (body) {
+                return { ok: r.ok, body: body };
+              });
+            })
+            .then(function (res) {
+              btn.disabled = false;
+              if (!res.ok || !res.body.ok) {
+                setStatus((res.body && res.body.error) || "Connect failed", "err");
+                return;
+              }
+              setStatus("Connected. Play a song on YouTube Music, then open the site.", "ok");
+              cookieEl.value = "";
+            })
+            .catch(function () {
+              btn.disabled = false;
+              setStatus("Could not reach API. Is npm run server running?", "err");
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

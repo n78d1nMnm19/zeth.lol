@@ -1,0 +1,17 @@
+node_modules/
+bot/node_modules/
+bot/.env
+bot/.env.*
+bot/data/ytmusic-headers.json
+bot/data/*.json
+!.gitkeep
+.DS_Store
+.env
+.env.*
+
+# Local Netlify folder
+.netlify
+
+# OS / editor
+Thumbs.db
+*.log
