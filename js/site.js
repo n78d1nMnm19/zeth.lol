@@ -1340,10 +1340,13 @@
           } else {
             destroyYoutubePlayer();
             if (sound.kind === "audio" && sound.src) {
-              if (a1.getAttribute("data-src") !== sound.src) {
-                a1.setAttribute("data-src", sound.src);
-                a1.src = sound.src;
-                a1.load();
+              var nextSrc = sound.src;
+              if (a1.getAttribute("data-src") !== nextSrc || !a1.getAttribute("src")) {
+                a1.setAttribute("data-src", nextSrc);
+                a1.src = nextSrc;
+                try {
+                  a1.load();
+                } catch (eLoad) {}
               }
               var vol = Number(C.soundVolume);
               if (!isFinite(vol)) vol = 0.16;
@@ -1353,6 +1356,7 @@
               }
             } else {
               a1.removeAttribute("src");
+              a1.removeAttribute("data-src");
             }
           }
 
@@ -1937,8 +1941,13 @@
           }
           window.ZETH_GATE_OPENED = true;
           gate.classList.add("is-off");
-          if (window.ZETH_NOW_PLAYING && typeof window.ZETH_NOW_PLAYING.onGateOpen === "function") {
-            window.ZETH_NOW_PLAYING.onGateOpen();
+          // Unlock listening audio inside this tap (phones block unmute otherwise)
+          if (window.ZETH_NOW_PLAYING) {
+            if (typeof window.ZETH_NOW_PLAYING.unlockListenSound === "function") {
+              window.ZETH_NOW_PLAYING.unlockListenSound();
+            } else if (typeof window.ZETH_NOW_PLAYING.onGateOpen === "function") {
+              window.ZETH_NOW_PLAYING.onGateOpen();
+            }
           }
           var v = document.getElementById("bg-video");
           var hasVideo = v && v.src;

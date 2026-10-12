@@ -18,14 +18,14 @@ window.ZETH_CONFIG = {
    * Same file as the background is fine: the `<audio>` element plays the file’s audio track.
    * Plays automatically when you click the gate (“click to enter”).
    */
-  soundUrl: "/assets/site-track.mp4?v=1",
+  soundUrl: "/assets/snaptik_7675527030619786528_v3.mp4?v=3",
   /** Playback volume 0–1 (softer = less harsh). */
   soundVolume: 0.3,
   /**
-   * Site MP3 plays after “click to enter” when you’re NOT listening on Discord
-   * (YouTube Music / Spotify via Lanyard). Pauses automatically while listening.
+   * Keep the site track playing even while Spotify / listening card is active.
+   * Listening UI is lyrics + metadata only (no YouTube mirror audio).
    */
-  pauseSiteMusicWhenListening: true,
+  pauseSiteMusicWhenListening: false,
 
   /** Custom cursor — leave "" for normal system cursor. */
   cursorPngUrl: "",
@@ -85,12 +85,14 @@ window.ZETH_CONFIG = {
   lanyardPollMs: 15000,
 
   /**
-   * YouTube Music account sync (cookie via /ytmusic-setup.html → /api/listening).
-   * Prefer this over Discord for music — YT Music doesn’t expose Discord RPC.
+   * Spotify now-playing (official API). Connect once at /spotify-setup.html.
+   * Real play/pause via GET /api/listening — typically ~1s delay.
    */
   youtubeMusicEnabled: true,
-  /** How often to poll your YT Music history for the current track (ms). Min 1000. */
-  youtubeMusicPollMs: 1500,
+  /** Spotify currently-playing (same function that stores OAuth tokens). */
+  listeningApiUrl: "/api/spotify?action=now",
+  /** How often the site polls Spotify (ms). */
+  youtubeMusicPollMs: 1000,
 
   /** Fallbacks if Lanyard is off or fails (handle/PFP overwrite from Discord APIs) */
   presenceName: "",

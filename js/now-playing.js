@@ -1,8 +1,8 @@
 /**
- * Live listening (YouTube Music account API + Lanyard Spotify fallback) + synced lyrics.
+ * Live listening card (Spotify / Lanyard) + synced lyrics.
+ * No YouTube mirror — site audio comes from config.soundUrl only.
  */
 (function (w) {
-  var C = w.ZETH_CONFIG || {};
   var lines = [];
   var activeIdx = -1;
   var trackKey = "";
@@ -17,11 +17,13 @@
   var accountActive = false;
   var accountPollTimer = null;
   var trackSource = ""; // "account" | "lanyard"
-  var listenYtPlayer = null;
-  var listenYtReady = false;
-  var listenYtVideoId = "";
-  var listenYtWantPlay = false;
-  var clientEndedVideoId = "";
+  /** Don't yank the card off on brief Spotify 204 / false is_playing blips */
+  var stickyClearTimer = null;
+  var STICKY_CLEAR_MS = 5000;
+  var lastAccountTrack = null;
+  var isMobile =
+    !!w.matchMedia &&
+    (w.matchMedia("(pointer: coarse)").matches || w.matchMedia("(max-width: 768px)").matches);
 
   function emitListeningChange(meta) {
     var on = !!meta;
@@ -40,27 +42,11 @@
     return document.getElementById(id);
   }
 
-  function parseLrc(raw) {
-    var out = [];
-    var text = String(raw || "");
-    if (!text) return out;
-    var re = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)/g;
-    var m;
-    while ((m = re.exec(text))) {
-      var min = parseInt(m[1], 10) || 0;
-      var sec = parseInt(m[2], 10) || 0;
-      var frac = m[3] || "0";
-      if (frac.length === 1) frac += "00";
-      else if (frac.length === 2) frac += "0";
-      var ms = min * 60000 + sec * 1000 + (parseInt(frac, 10) || 0);
-      var line = String(m[4] || "").trim();
-      if (!line) continue;
-      out.push({ t: ms, text: line });
-    }
-    out.sort(function (a, b) {
-      return a.t - b.t;
-    });
-    return out;
+  function hideMirrorUi() {
+    var host = $("listen-yt-host");
+    if (host) host.classList.add("hidden");
+    var btn = $("listen-sound-btn");
+    if (btn) btn.classList.add("hidden");
   }
 
   function discordAssetUrl(applicationId, asset) {
@@ -72,7 +58,6 @@
     }
     if (a.indexOf("mp:external/") === 0) {
       var rest = a.slice("mp:external/".length);
-      // HASH/https/host/path...  or media.discordapp.net/external/...
       var m = rest.match(/^(?:[^/]+\/)?(https?)\/(.+)$/i);
       if (m) return m[1] + "://" + m[2];
       return "https://media.discordapp.net/external/" + rest;
@@ -124,7 +109,6 @@
     function fromActivity(act, sourceOverride) {
       var title = String(act.details || "").trim();
       var artistLine = String(act.state || "").trim();
-      // YouTube Music often: "Artist · Album" or just artist
       var artist = artistLine.split("·")[0].trim();
       var album = "";
       if (artistLine.indexOf("·") !== -1) {
@@ -153,7 +137,6 @@
       };
     }
 
-    // Prefer YouTube Music / listening (type 2), then watching YouTube Music
     for (i = 0; i < activities.length; i++) {
       a = activities[i];
       if (!a) continue;
@@ -180,136 +163,47 @@
   }
 
   function progressMs(meta) {
-    // Prefer live YouTube playback position when we're playing the song
-    if (listenYtPlayer && listenYtReady) {
-      try {
-        var st = listenYtPlayer.getPlayerState();
-        // 1 playing, 2 paused, 3 buffering
-        if (st === 1 || st === 2 || st === 3) {
-          var t = listenYtPlayer.getCurrentTime();
-          if (isFinite(t) && t >= 0) return Math.floor(t * 1000);
-        }
-      } catch (eProg) {}
+    if (!meta) return 0;
+    if (meta.paused && typeof meta.progressMs === "number") {
+      return Math.max(0, meta.progressMs);
     }
-    if (!meta || !meta.start) return 0;
-    var now = Date.now();
-    var elapsed = now - meta.start;
-    if (meta.end && meta.end > meta.start) {
-      elapsed = Math.min(Math.max(0, elapsed), meta.end - meta.start);
-    }
-    return Math.max(0, elapsed);
-  }
-
-  function ensureYoutubeApi(cb) {
-    if (w.YT && w.YT.Player) {
-      cb();
-      return;
-    }
-    ensureYoutubeApi.q = ensureYoutubeApi.q || [];
-    ensureYoutubeApi.q.push(cb);
-    if (ensureYoutubeApi.loading) return;
-    ensureYoutubeApi.loading = true;
-    var tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    var first = document.getElementsByTagName("script")[0];
-    first.parentNode.insertBefore(tag, first);
-    var prev = w.onYouTubeIframeAPIReady;
-    w.onYouTubeIframeAPIReady = function () {
-      if (typeof prev === "function") prev();
-      var q = ensureYoutubeApi.q || [];
-      ensureYoutubeApi.q = [];
-      for (var i = 0; i < q.length; i++) q[i]();
-    };
-  }
-
-  function listenVolume() {
-    var vol = Number((w.ZETH_CONFIG || {}).soundVolume);
-    if (!isFinite(vol)) vol = 0.3;
-    return Math.round(Math.max(0, Math.min(1, vol)) * 100);
-  }
-
-  function stopListenAudio() {
-    listenYtWantPlay = false;
-    listenYtVideoId = "";
-    if (listenYtPlayer) {
-      try {
-        listenYtPlayer.stopVideo();
-      } catch (eStop) {}
-      try {
-        listenYtPlayer.pauseVideo();
-      } catch (ePause) {}
-    }
-  }
-
-  function playListenAudio(meta) {
-    var vid = meta && String(meta.videoId || "").trim();
-    if (!vid) {
-      stopListenAudio();
-      return;
-    }
-    if (!w.ZETH_GATE_OPENED) {
-      listenYtWantPlay = true;
-      listenYtVideoId = vid;
-      return;
-    }
-    listenYtWantPlay = true;
-
-    function startPlayer() {
-      if (!listenYtPlayer) {
-        listenYtPlayer = new w.YT.Player("listen-yt-host", {
-          width: 120,
-          height: 68,
-          videoId: vid,
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            rel: 0,
-            playsinline: 1,
-            modestbranding: 1,
-            disablekb: 1,
-          },
-          events: {
-            onReady: function (ev) {
-              listenYtReady = true;
-              listenYtVideoId = vid;
-              try {
-                ev.target.unMute();
-                ev.target.setVolume(listenVolume());
-                if (listenYtWantPlay) ev.target.playVideo();
-              } catch (eReady) {}
-            },
-            onStateChange: function (ev) {
-              // 0 = ended → stop listening UI + resume site MP3
-              if (ev.data === 0) {
-                clientEndedVideoId = listenYtVideoId || (trackMeta && trackMeta.videoId) || "";
-                clearListeningUi();
-              }
-            },
-            onError: function () {
-              // Age-restricted / unavailable — keep lyrics, no audio
-            },
-          },
-        });
-        return;
+    if (meta.start) {
+      var elapsed = Date.now() - meta.start;
+      if (meta.end && meta.end > meta.start) {
+        elapsed = Math.min(Math.max(0, elapsed), meta.end - meta.start);
       }
-      if (listenYtVideoId === vid && listenYtReady) {
-        try {
-          listenYtPlayer.unMute();
-          listenYtPlayer.setVolume(listenVolume());
-          if (listenYtPlayer.getPlayerState() !== 1) listenYtPlayer.playVideo();
-        } catch (ePlay) {}
-        return;
-      }
-      listenYtVideoId = vid;
-      try {
-        listenYtPlayer.loadVideoById(vid);
-        listenYtPlayer.unMute();
-        listenYtPlayer.setVolume(listenVolume());
-        listenYtPlayer.playVideo();
-      } catch (eLoad) {}
+      return Math.max(0, elapsed);
     }
+    if (typeof meta.progressMs === "number") {
+      return Math.max(0, meta.progressMs);
+    }
+    return 0;
+  }
 
-    ensureYoutubeApi(startPlayer);
+  function resetLyricsScroll() {
+    var track = $("lyrics-track");
+    if (!track) return;
+    var prev = track.style.transition;
+    track.style.transition = "none";
+    track.style.transform = "translate3d(0,0,0)";
+    void track.offsetHeight;
+    track.style.transition = prev || "";
+  }
+
+  function cancelStickyClear() {
+    if (stickyClearTimer) {
+      clearTimeout(stickyClearTimer);
+      stickyClearTimer = null;
+    }
+  }
+
+  function scheduleStickyClear() {
+    if (stickyClearTimer) return;
+    stickyClearTimer = w.setTimeout(function () {
+      stickyClearTimer = null;
+      lastAccountTrack = null;
+      clearListeningUi();
+    }, STICKY_CLEAR_MS);
   }
 
   function durationSec(meta) {
@@ -317,10 +211,11 @@
     if (meta.end && meta.start && meta.end > meta.start) {
       return Math.round((meta.end - meta.start) / 1000);
     }
-    return 0;
+    return Number(meta.durationSec) || 0;
   }
 
   function setListeningUi(meta) {
+    hideMirrorUi();
     var idle = $("now-idle");
     var listen = $("now-listening");
     var panel = $("lyrics-panel");
@@ -360,10 +255,11 @@
     var track = $("lyrics-track");
     if (!track) return;
     track.textContent = "";
+    resetLyricsScroll();
     if (!list.length) {
       var empty = document.createElement("p");
       empty.className = "lyrics-empty";
-      empty.textContent = "no synced lyrics found";
+      empty.textContent = "lyrics unavailable";
       track.appendChild(empty);
       return;
     }
@@ -436,82 +332,70 @@
     activeIdx = -1;
   }
 
+  function applyLyricsPayload(meta, body) {
+    if (!trackMeta || trackMeta.key !== meta.key) return;
+    if (body && body.instrumental) {
+      lines = [];
+      setListeningUi(trackMeta);
+      var trackEl = $("lyrics-track");
+      if (trackEl) {
+        trackEl.textContent = "";
+        resetLyricsScroll();
+        var empty = document.createElement("p");
+        empty.className = "lyrics-empty";
+        empty.textContent = "instrumental";
+        trackEl.appendChild(empty);
+      }
+      stopTicker();
+      return;
+    }
+    lines = Array.isArray(body && body.lines) ? body.lines : [];
+    setListeningUi(trackMeta);
+    renderLyricLines(lines);
+    activeIdx = -1;
+    if (lines.length) {
+      var idx = indexForTime(progressMs(trackMeta));
+      activeIdx = idx;
+      paintActive(idx);
+    }
+    startTicker();
+  }
+
   function fetchLyrics(meta) {
     var seq = ++fetchSeq;
-    var title = meta.title;
+    if (meta && meta.lyrics && Array.isArray(meta.lyrics.lines) && meta.lyrics.lines.length) {
+      applyLyricsPayload(meta, meta.lyrics);
+      return Promise.resolve();
+    }
+    if (meta && meta.lyrics && meta.lyrics.instrumental) {
+      applyLyricsPayload(meta, meta.lyrics);
+      return Promise.resolve();
+    }
+
+    var title = meta.title || "";
     var artist = meta.artist || "";
     var album = meta.album || "";
     var dur = durationSec(meta);
+    var q =
+      "/api/lyrics?title=" +
+      encodeURIComponent(title) +
+      "&artist=" +
+      encodeURIComponent(artist) +
+      "&album=" +
+      encodeURIComponent(album) +
+      "&duration=" +
+      encodeURIComponent(String(dur || 0)) +
+      "&_=" +
+      Date.now();
 
-    function headers() {
-      return {
-        Accept: "application/json",
-        "Lrclib-Client": "slits.lol listening widget",
-      };
-    }
-
-    function fromGet() {
-      var q =
-        "https://lrclib.net/api/get?track_name=" +
-        encodeURIComponent(title) +
-        "&artist_name=" +
-        encodeURIComponent(artist || "Unknown");
-      if (album) q += "&album_name=" + encodeURIComponent(album);
-      if (dur > 0) q += "&duration=" + encodeURIComponent(String(dur));
-      return fetch(q, { credentials: "omit", headers: headers() }).then(function (r) {
-        if (!r.ok) throw new Error("get " + r.status);
+    return fetch(q, { credentials: "omit", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("lyrics " + r.status);
         return r.json();
-      });
-    }
-
-    function fromSearch() {
-      var q =
-        "https://lrclib.net/api/search?track_name=" +
-        encodeURIComponent(title) +
-        "&artist_name=" +
-        encodeURIComponent(artist || "");
-      return fetch(q, { credentials: "omit", headers: headers() })
-        .then(function (r) {
-          if (!r.ok) throw new Error("search " + r.status);
-          return r.json();
-        })
-        .then(function (list) {
-          if (!Array.isArray(list) || !list.length) throw new Error("empty search");
-          var best = null;
-          for (var i = 0; i < list.length; i++) {
-            if (list[i] && list[i].syncedLyrics) {
-              best = list[i];
-              break;
-            }
-          }
-          if (!best) best = list[0];
-          return best;
-        });
-    }
-
-    return fromGet()
-      .catch(function () {
-        return fromSearch();
       })
       .then(function (body) {
-        if (seq !== fetchSeq || !trackMeta || trackMeta.key !== meta.key) return;
-        var synced = body && body.syncedLyrics;
-        var plain = body && body.plainLyrics;
-        lines = parseLrc(synced);
-        if (!lines.length && plain) {
-          lines = String(plain)
-            .split(/\n/)
-            .map(function (t, i) {
-              return { t: i * 3000, text: String(t).trim() };
-            })
-            .filter(function (x) {
-              return x.text;
-            });
-        }
-        setListeningUi(trackMeta);
-        renderLyricLines(lines);
-        activeIdx = -1;
-        startTicker();
+        if (seq !== fetchSeq) return;
+        applyLyricsPayload(meta, body);
       })
       .catch(function () {
         if (seq !== fetchSeq || !trackMeta || trackMeta.key !== meta.key) return;
@@ -523,6 +407,7 @@
   }
 
   function clearListeningUi() {
+    cancelStickyClear();
     trackMeta = null;
     trackKey = "";
     lastFetchKey = "";
@@ -531,66 +416,62 @@
     lines = [];
     setListeningUi(null);
     stopTicker();
-    stopListenAudio();
     var track = $("lyrics-track");
-    if (track) track.textContent = "";
+    if (track) {
+      track.textContent = "";
+      resetLyricsScroll();
+    }
     emitListeningChange(null);
   }
 
   function applyTrack(meta, source) {
     if (!meta) {
-      if (trackSource === source || !trackMeta) clearListeningUi();
+      if (trackSource === source || !trackMeta) scheduleStickyClear();
       return null;
     }
-    // Don't restart a track the user (or player) already finished
-    if (meta.videoId && meta.videoId === clientEndedVideoId) {
-      return null;
-    }
-    if (meta.videoId && meta.videoId !== clientEndedVideoId) {
-      clientEndedVideoId = "";
-    }
+    cancelStickyClear();
 
+    var prevKey = trackKey;
     setListeningUi(meta);
     trackMeta = meta;
     trackSource = source || trackSource || "lanyard";
+    if (source === "account") lastAccountTrack = meta;
 
-    if (meta.key !== trackKey) {
+    if (meta.key !== prevKey) {
       trackKey = meta.key;
+      stopTicker();
+      lines = [];
       activeIdx = -1;
-      if (meta.key !== lastFetchKey) {
-        lastFetchKey = meta.key;
-        var trackEl = $("lyrics-track");
-        if (trackEl) {
-          trackEl.textContent = "";
-          var loading = document.createElement("p");
-          loading.className = "lyrics-empty";
-          loading.textContent = "loading lyrics…";
-          trackEl.appendChild(loading);
-        }
-        fetchLyrics(meta);
+      lastFetchKey = meta.key;
+      var trackEl = $("lyrics-track");
+      if (trackEl) {
+        trackEl.textContent = "";
+        resetLyricsScroll();
+        var loading = document.createElement("p");
+        loading.className = "lyrics-empty";
+        loading.textContent = "loading lyrics…";
+        trackEl.appendChild(loading);
       }
-      playListenAudio(meta);
+      fetchLyrics(meta);
       emitListeningChange(meta);
     } else {
-      // same song — keep audio going, sync lyrics clock
-      playListenAudio(meta);
-      startTicker();
+      if (meta.lyrics && meta.lyrics.lines && meta.lyrics.lines.length && !lines.length) {
+        applyLyricsPayload(meta, meta.lyrics);
+      } else if (meta.lyrics && meta.lyrics.instrumental && lines.length) {
+        applyLyricsPayload(meta, meta.lyrics);
+      }
+      if (lines.length) startTicker();
       emitListeningChange(meta);
     }
     return meta;
   }
 
   function applyFromLanyard(d) {
-    // Account YouTube Music wins over Discord presence for music
-    if (accountConfigured && accountActive) return trackMeta;
+    if (accountConfigured) return trackMeta;
     var meta = extractListening(d);
     if (!meta) {
-      if (trackSource === "lanyard" || !trackSource) clearListeningUi();
+      if (trackSource === "lanyard") scheduleStickyClear();
       return null;
-    }
-    // Ignore YouTube-looking Discord activities when account API is connected
-    if (accountConfigured && meta.source && String(meta.source).indexOf("youtube") !== -1) {
-      return trackMeta;
     }
     return applyTrack(meta, "lanyard");
   }
@@ -598,11 +479,32 @@
   function listeningApiUrl() {
     if (typeof location === "undefined") return "";
     if (location.protocol !== "http:" && location.protocol !== "https:") return "";
-    var base = String((w.ZETH_CONFIG || {}).apiBaseUrl || "").trim().replace(/\/+$/, "");
-    // Prefer same-origin so local cookie auth on npm run server works
-    if (!base || base.indexOf(location.host) !== -1) return "/api/listening";
-    // If apiBaseUrl points elsewhere, still try same-origin first for YT Music
+    var cfg = w.ZETH_CONFIG || {};
+    var custom = String(cfg.listeningApiUrl || "").trim();
+    if (custom) return custom;
     return "/api/listening";
+  }
+
+  var accountPollSeq = 0;
+  var lastTopVideoId = "";
+
+  function trackFromTop(top) {
+    if (!top || !top.videoId) return null;
+    var start = Date.now();
+    var dur = Number(top.durationSec) || 0;
+    return {
+      source: "youtube music",
+      title: top.title || "",
+      artist: top.artist || "",
+      album: "",
+      art: "",
+      videoId: top.videoId,
+      start: start,
+      end: dur > 0 ? start + dur * 1000 : 0,
+      durationSec: dur,
+      playedAgeSec: top.playedAgeSec,
+      key: "ytm:" + top.videoId,
+    };
   }
 
   function pollYoutubeMusicAccount() {
@@ -610,26 +512,65 @@
     if (cfg.youtubeMusicEnabled === false) return Promise.resolve();
     var url = listeningApiUrl();
     if (!url) return Promise.resolve();
-    return fetch(url, { credentials: "omit", cache: "no-store" })
+    var seq = ++accountPollSeq;
+    var sep = url.indexOf("?") === -1 ? "?" : "&";
+    return fetch(url + sep + "_=" + Date.now(), {
+      credentials: "omit",
+      cache: "no-store",
+    })
       .then(function (r) {
         if (!r.ok) throw new Error("listening " + r.status);
         return r.json();
       })
       .then(function (body) {
-        accountConfigured = !!(body && body.configured);
-        if (body && body.listening && body.track) {
-          accountActive = true;
-          // keep server start/end for lyric progress
-          applyTrack(body.track, "account");
-          return body.track;
+        if (seq !== accountPollSeq) return null;
+
+        if (body && (body.error === "NO_AUTH" || body.error === "REAUTH")) {
+          accountConfigured = false;
+          if (body.error === "REAUTH" && trackSource === "account") {
+            scheduleStickyClear();
+          }
+          return null;
         }
-        var wasAccount = accountActive || trackSource === "account";
+
+        accountConfigured = !!(body && body.configured);
+        var top = body && body.top;
+        var topId = (top && top.videoId) || "";
+
+        if (body && body.listening && body.track) {
+          var t = body.track;
+          if (body.paused) t.paused = true;
+          accountActive = true;
+          lastTopVideoId = t.videoId || topId || lastTopVideoId;
+          applyTrack(t, "account");
+          return t;
+        }
+
+        if (body && body.paused && body.track) {
+          var pt = body.track;
+          pt.paused = true;
+          accountActive = true;
+          applyTrack(pt, "account");
+          return pt;
+        }
+
+        if (topId && lastTopVideoId && topId !== lastTopVideoId) {
+          var forced = trackFromTop(top);
+          lastTopVideoId = topId;
+          if (forced) {
+            accountActive = true;
+            applyTrack(forced, "account");
+            return forced;
+          }
+        }
+        if (topId) lastTopVideoId = topId;
+
+        var wasAccount = accountActive || trackSource === "account" || !!lastAccountTrack;
         accountActive = false;
-        if (wasAccount) clearListeningUi();
+        if (wasAccount) scheduleStickyClear();
         return null;
       })
       .catch(function () {
-        // API missing (e.g. static serve) — leave Lanyard fallback alone
         return null;
       });
   }
@@ -641,12 +582,25 @@
       clearInterval(accountPollTimer);
       accountPollTimer = null;
     }
-    pollYoutubeMusicAccount();
-    var ms =
-      typeof cfg.youtubeMusicPollMs === "number" && cfg.youtubeMusicPollMs >= 1000
+    var base =
+      typeof cfg.youtubeMusicPollMs === "number" && cfg.youtubeMusicPollMs >= 300
         ? cfg.youtubeMusicPollMs
-        : 1500;
+        : 1000;
+    var ms = isMobile ? Math.max(base, 2000) : base;
+    hideMirrorUi();
+    pollYoutubeMusicAccount();
+    w.setTimeout(pollYoutubeMusicAccount, isMobile ? 400 : 200);
     accountPollTimer = w.setInterval(pollYoutubeMusicAccount, ms);
+
+    if (!startAccountPolling._visBound) {
+      startAccountPolling._visBound = true;
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") pollYoutubeMusicAccount();
+      });
+      w.addEventListener("focus", function () {
+        pollYoutubeMusicAccount();
+      });
+    }
   }
 
   w.ZETH_NOW_PLAYING = {
@@ -655,11 +609,9 @@
     extractListening: extractListening,
     startAccountPolling: startAccountPolling,
     pollYoutubeMusicAccount: pollYoutubeMusicAccount,
-    onGateOpen: function () {
-      if (trackMeta && trackMeta.videoId) playListenAudio(trackMeta);
-      else if (listenYtWantPlay && listenYtVideoId) {
-        playListenAudio({ videoId: listenYtVideoId });
-      }
+    onGateOpen: function () {},
+    unlockListenSound: function () {
+      return false;
     },
     isListening: function () {
       return !!trackMeta;
@@ -672,7 +624,6 @@
     },
   };
 
-  // Auto-start account poll when DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", startAccountPolling);
   } else {

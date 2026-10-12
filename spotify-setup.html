@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect Spotify — slits.lol</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, sans-serif;
+        color: #fff;
+        background: #0a0a0a;
+      }
+      body {
+        max-width: 640px;
+        margin: 40px auto;
+        padding: 0 20px 60px;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: #9ca3af;
+        font-size: 14px;
+      }
+      ol {
+        padding-left: 1.2rem;
+        color: #d1d5db;
+        font-size: 14px;
+      }
+      li {
+        margin: 10px 0;
+      }
+      input {
+        width: 100%;
+        margin: 8px 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #333;
+        background: #141416;
+        color: #fff;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      button,
+      a.btn {
+        display: inline-block;
+        margin: 10px 8px 0 0;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 999px;
+        background: #1db954;
+        color: #000;
+        font-weight: 800;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 14px;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      a.btn.secondary,
+      button.secondary {
+        background: #222;
+        color: #fff;
+        border: 1px solid #444;
+      }
+      .status {
+        margin-top: 16px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .ok {
+        color: #4ade80;
+      }
+      .err {
+        color: #f87171;
+      }
+      .wait {
+        color: #fbbf24;
+      }
+      .card {
+        margin-top: 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: #141416;
+        border: 1px solid #2a2a2e;
+        font-size: 13px;
+        color: #d1d5db;
+      }
+      code {
+        background: #1f1f23;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 12px;
+        word-break: break-all;
+      }
+      a {
+        color: #93c5fd;
+      }
+      label {
+        display: block;
+        margin-top: 12px;
+        font-size: 13px;
+        color: #9ca3af;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Connect Spotify</h1>
+    <p class="muted">
+      Play on the <strong>Spotify app</strong> (phone or PC). You do <strong>not</strong> need to leave this
+      site open for others to see what you’re playing. Closing the browser tab stops <em>site</em> audio
+      (normal browser rule) — Spotify itself keeps playing.
+    </p>
+
+    <ol>
+      <li>
+        Open
+        <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener"
+          >Spotify Developer Dashboard</a
+        >
+        → your app (or <strong>Create app</strong>).
+      </li>
+      <li>
+        <strong>Settings</strong> → Redirect URI exactly:
+        <div style="margin-top: 8px"><code id="redir">https://slits.lol/api/spotify/callback</code></div>
+      </li>
+      <li>Paste Client ID + Secret → click <strong>Connect Spotify</strong> → Approve.</li>
+    </ol>
+
+    <label>Client ID</label>
+    <input id="clientId" autocomplete="off" placeholder="Spotify Client ID" />
+    <label>Client Secret</label>
+    <input id="clientSecret" autocomplete="off" type="password" placeholder="Spotify Client Secret" />
+
+    <p>
+      <button type="button" id="connect">Connect Spotify</button>
+      <a class="btn secondary" href="/">Open site</a>
+    </p>
+    <p class="muted">
+      If credentials were saved before, leave the fields filled (or paste again) and click Connect —
+      it clears the old login and opens Spotify approval.
+    </p>
+
+    <p id="status" class="status wait">Checking…</p>
+    <div class="card">
+      After connect, play something on Spotify. The site updates in about a second (click enter for
+      audio).
+    </div>
+
+    <script>
+      (function () {
+        var status = document.getElementById("status");
+        var redir = document.getElementById("redir");
+        var connectBtn = document.getElementById("connect");
+        var params = new URLSearchParams(location.search);
+        var configured = false;
+
+        function setStatus(t, cls) {
+          status.className = "status " + (cls || "wait");
+          status.textContent = t;
+        }
+
+        var errMap = {
+          save_credentials_first: "Paste Client ID & Secret, then click Connect Spotify.",
+          missing_client: "Paste Client ID & Secret, then click Connect Spotify.",
+          missing_code: "Spotify did not return a code — try Connect again.",
+          access_denied: "You denied access — click Connect and Approve.",
+        };
+        if (params.get("ok")) setStatus("Connected. Play a song and open the site.", "ok");
+        if (params.get("error")) {
+          var e = params.get("error");
+          setStatus("Error: " + (errMap[e] || e), "err");
+        }
+
+        function refresh() {
+          fetch("/api/spotify?t=" + Date.now())
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (d) {
+              if (d.redirectUri) redir.textContent = d.redirectUri;
+              configured = !!d.configured;
+              if (params.get("ok") || params.get("error")) return;
+              if (d.listening && d.track) {
+                setStatus("Live — “" + d.track.title + "” by " + (d.track.artist || ""), "ok");
+                return;
+              }
+              if (d.connected) {
+                setStatus("Connected. Play a song on Spotify — site updates in ~1s.", "ok");
+                return;
+              }
+              if (d.needsReauth || d.error === "REAUTH") {
+                setStatus("Login expired. Paste credentials and click Connect Spotify.", "err");
+                return;
+              }
+              if (d.configured && !d.hasRefreshToken) {
+                setStatus("Credentials on file. Click Connect Spotify to approve again.", "wait");
+                return;
+              }
+              setStatus("Not connected — paste credentials and click Connect Spotify.", "wait");
+            })
+            .catch(function () {
+              setStatus("API unreachable.", "err");
+            });
+        }
+
+        connectBtn.onclick = function () {
+          var clientId = document.getElementById("clientId").value.trim();
+          var clientSecret = document.getElementById("clientSecret").value.trim();
+          if (!clientId || !clientSecret) {
+            if (configured) {
+              // Credentials already on server — jump straight to Spotify
+              setStatus("Opening Spotify…", "wait");
+              location.href = "/api/spotify?action=authorize";
+              return;
+            }
+            setStatus("Enter Client ID and Secret.", "err");
+            return;
+          }
+          connectBtn.disabled = true;
+          setStatus("Saving & opening Spotify…", "wait");
+          fetch("/api/spotify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clientId: clientId,
+              clientSecret: clientSecret,
+              clearRefresh: true,
+            }),
+          })
+            .then(function (r) {
+              return r.json().then(function (d) {
+                return { okHttp: r.ok, d: d };
+              });
+            })
+            .then(function (res) {
+              if (!res.okHttp || !res.d || !res.d.ok) {
+                connectBtn.disabled = false;
+                setStatus((res.d && res.d.error) || "Save failed — try again", "err");
+                return;
+              }
+              if (res.d.redirectUri) redir.textContent = res.d.redirectUri;
+              // Confirm credentials stuck before OAuth (fixes “lost auth” after connect)
+              return fetch("/api/spotify?t=" + Date.now())
+                .then(function (r2) {
+                  return r2.json();
+                })
+                .then(function (st) {
+                  if (!st.configured) {
+                    connectBtn.disabled = false;
+                    setStatus("Save didn’t stick — try Connect again.", "err");
+                    return;
+                  }
+                  location.href = res.d.authorizeUrl || "/api/spotify?action=authorize";
+                });
+            })
+            .catch(function () {
+              connectBtn.disabled = false;
+              setStatus("Save failed.", "err");
+            });
+        };
+
+        refresh();
+        setInterval(refresh, 2500);
+      })();
+    </script>
+  </body>
+</html>

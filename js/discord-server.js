@@ -123,16 +123,21 @@
     if (C.discordServerFromInvite === false) return;
     var code = inviteCodeFromConfig(C);
     if (!code) return;
+    // Proxy — discord.com/api blocks browser CORS
     var api =
-      "https://discord.com/api/v10/invites/" +
+      "/api/discord-invite?code=" +
       encodeURIComponent(code) +
-      "?with_counts=true&with_expiration=true";
-    fetch(api, { credentials: "omit" })
+      "&_=" +
+      Date.now();
+    fetch(api, { credentials: "omit", cache: "no-store" })
       .then(function (r) {
         if (!r.ok) throw new Error("invite " + r.status);
         return r.json();
       })
-      .then(applyInvitePayload)
+      .then(function (body) {
+        if (!body || body.ok === false) throw new Error("invite bad");
+        applyInvitePayload(body);
+      })
       .catch(function () {});
   }
 

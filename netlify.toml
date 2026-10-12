@@ -9,7 +9,9 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["netlify/functions/**", "lib/**"]
+  # Required so Blobs share state across functions (nowplaying → listening)
+  external_node_modules = ["@netlify/blobs"]
+  included_files = ["netlify/functions/**", "lib/**", "assets/ytmusic-bridge.user.js", "assets/ytmusic-bridge-bookmark.js"]
 
 [[redirects]]
   from = "/api/views"
@@ -30,6 +32,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/discord-invite"
+  to = "/.netlify/functions/discord-invite"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/health"
   to = "/.netlify/functions/health"
   status = 200
@@ -38,5 +46,59 @@
 [[redirects]]
   from = "/api/listening"
   to = "/.netlify/functions/listening"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/lyrics"
+  to = "/.netlify/functions/lyrics"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/spotify"
+  to = "/.netlify/functions/spotify"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/spotify/*"
+  to = "/.netlify/functions/spotify"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ytmusic/connect"
+  to = "/.netlify/functions/ytmusic"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ytmusic/status"
+  to = "/.netlify/functions/ytmusic"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/nowplaying"
+  to = "/.netlify/functions/nowplaying"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ytmusic-bridge"
+  to = "/.netlify/functions/ytmusic-bridge"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ytmusic-bridge.user.js"
+  to = "/.netlify/functions/ytmusic-bridge"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ytmusic-bridge-bookmark"
+  to = "/.netlify/functions/ytmusic-bridge-bookmark"
   status = 200
   force = true
